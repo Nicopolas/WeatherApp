@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!-- Отдельный XML-файл для изменяемых размеров приложения -->
+
+<resources>
+
+    <dimen name="activity_horizontal_margin">16dp</dimen>
+    <dimen name="activity_vertical_margin">16dp</dimen>
+    <dimen name="icon_font_size">150sp</dimen>
+    <dimen name="updated_font_size">13sp</dimen>
+    <dimen name="temperature_font_size">40sp</dimen>
+
+</resources>

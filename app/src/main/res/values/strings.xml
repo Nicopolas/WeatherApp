@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!-- Отдельный XML-файл для изменяемых текстов приложения -->
+
+<resources>
+
+    <string name="app_name">MyWeather</string>
+
+    <!-- Хорошей практикой является заведение отдельных значений для одинаковых текстов -->
+    <string name="change_city">Change city</string>
+    <string name="change_city_dialog">Change city</string>
+
+    <!-- Будем парсить только 8 состояний -->
+    <string name="weather_sunny">&#xf00d;</string>
+    <string name="weather_clear_night">&#xf02e;</string>
+    <string name="weather_foggy">&#xf014;</string>
+    <string name="weather_cloudy">&#xf013;</string>
+    <string name="weather_rainy">&#xf019;</string>
+    <string name="weather_snowy">&#xf01b;</string>
+    <string name="weather_thunder">&#xf01e;</string>
+    <string name="weather_drizzle">&#xf01c;</string>
+    <string name="place_not_found">Sorry, no weather data found.</string>
+
+    <!-- APP ID вашего аккаунта на сайте погоды: бесплатен -->
+    <!-- Рекомендую завести и скопировать сюда собственный ключ -->
+    <string name="open_weather_maps_app_id">4c9b542623fc410c003d9bd839f9037d</string>
+
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+
+
+    <string name="dialog_1">Dialog 1</string>
+    <string name="dialog_2">Dialog 2</string>
+    <string name="message_text">Text of your message</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="maybe">Maybe</string>
+
+</resources>
