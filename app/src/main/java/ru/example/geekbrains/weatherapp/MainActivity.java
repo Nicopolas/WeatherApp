@@ -1,12 +1,21 @@
 package ru.example.geekbrains.weatherapp;
 
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.res.Resources;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.Handler;
-import android.support.v4.app.DialogFragment;
+import android.support.annotation.NonNull;
+import android.support.design.widget.NavigationView;
+import android.support.v4.view.GravityCompat;
+import android.support.v4.widget.DrawerLayout;
+import android.support.v7.app.ActionBarDrawerToggle;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.Toolbar;
 import android.text.InputType;
 import android.util.Log;
 import android.view.Menu;
@@ -17,24 +26,25 @@ import android.widget.Toast;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 
 import org.json.JSONObject;
 
+import java.lang.reflect.Type;
 import java.text.DateFormat;
-import java.text.DecimalFormat;
 import java.util.Date;
 import java.util.Locale;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
 
     // Классовые переменные
     private static final String LOG_TAG = MainActivity.class.getSimpleName();
     private static final String FONT_FILENAME = "fonts/weather.ttf";
     private static final String POSITIVE_BUTTON_TEXT = "Go";
-
-    /*  public FragmentManager fm = getSupportFragmentManager();
-        public DialogFragment dialogFragment = fm.findFragmentById(R.id.fragment_container);*/
-    public DialogFragment dialogFragment;
 
     // Handler - это класс, позволяющий отправлять и обрабатывать сообщения и объекты runnable.
     // Он используется в двух случаях - когда нужно применить объект runnable когда-то в будущем,
@@ -50,12 +60,10 @@ public class MainActivity extends AppCompatActivity {
     private TextView currentTemperatureTextView;
     private TextView weatherIcon;
 
-    public  WeatherObject weather;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.workout_drawer_layout);
 
         cityTextView = findViewById(R.id.city_field);
         updatedTextView = findViewById(R.id.updated_field);
@@ -65,6 +73,44 @@ public class MainActivity extends AppCompatActivity {
 
         weatherFont = Typeface.createFromAsset(getAssets(), FONT_FILENAME);
         weatherIcon.setTypeface(weatherFont);
+
+
+        Toolbar toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+
+        // Находим drawer в ресурсах.
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
+
+        // Этот класс связывает drawer и toolbar, позволяя drawer-у корректно отображаться с
+        // hamburger menu в action bar, а также выдвигает drawer и задвигает.
+        ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
+                this, drawer, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
+        // Добавляем слушателя на drawer.
+        drawer.addDrawerListener(toggle);
+        // Cинхронизируем hamburger menu с drawer.
+        toggle.syncState();
+
+        // Специальный класс для размещения пунктов списка в drawer'е
+        NavigationView navigationView = findViewById(R.id.nav_view);
+        // Добавляем слушатель нажатий на пункт списка
+        navigationView.setNavigationItemSelectedListener(this);
+
+
+        String oldCity = loadFromPreferences(R.string.save_city_prefs_key);
+        if (!oldCity.isEmpty()) {
+            changeCity(oldCity);
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        //обработка нажатия в Navigation Drawer
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
+        if (drawer.isDrawerOpen(GravityCompat.START)) {
+            drawer.closeDrawer(GravityCompat.START);
+            return;
+        }
+        super.onBackPressed();
     }
 
     @Override
@@ -84,7 +130,6 @@ public class MainActivity extends AppCompatActivity {
 
     // Показываем диалоговое окно с выбором города
     private void showInputDialog() {
-
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle(getString(R.string.change_city_dialog));
 
@@ -105,8 +150,10 @@ public class MainActivity extends AppCompatActivity {
     private void updateWeatherData(final String city) {
         new Thread() { //Отдельный поток для получения новых данных в фоне
             public void run() {
-                final JSONObject json = WeatherDataLoader.getJSONObjectUsingOKHttp(getApplicationContext(), city);
-
+                final JSONObject json = WeatherDataLoader.getJSONData(getApplicationContext(), city);
+                // Вызов методов напрямую может вызвать runtime error
+                // Мы не можем напрямую обновить UI, поэтому используем handler,
+                // чтобы обновить интерфейс в главном потоке.
                 if (json == null) {
                     handler.post(new Runnable() {
                         public void run() {
@@ -118,76 +165,96 @@ public class MainActivity extends AppCompatActivity {
                     handler.post(new Runnable() {
                         public void run() {
                             renderWeather(json);
-                            renderWeatherFronObject(json);
-                            parseJsonInWeatherObject(json);
                         }
                     });
             }
         }.start();
     }
-    private void parseJsonInWeatherObject(JSONObject json){
-        //попытка создать обьект из JSONObject
-        GsonBuilder builder = new GsonBuilder();
-        Gson gson = builder.create();
-        weather = gson.fromJson(json.toString(), WeatherObject.class);
+
+    @Override
+    public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+
+        switch (item.getItemId()) {
+            case R.id.nav_main_windows:
+                makeToast("В разарботке");
+                break;
+            case R.id.nav_manage:
+                makeToast("В разарботке");
+                break;
+            case R.id.nav_about_developers:
+                makeToast("В разарботке");
+                break;
+            case R.id.nav_share:
+                sendOut();
+            case R.id.nav_exit_app:
+                finish();
+                break;
+        }
+
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
+        // закрываем NavigationView, параметр определяет анимацию закрытия
+        drawer.closeDrawer(GravityCompat.START);
+
+        return true;
     }
 
-    // Обработка загруженных данных и обновление UI (без желтого)
-    private void renderWeather(JSONObject json) {
-        Log.d(LOG_TAG, "json " + json.toString());
-        try {
-            cityTextView.setText(String.format("%S, %S",
-                    json.getString("name").toUpperCase(Locale.US),
-                    json.getJSONObject("sys").getString("country")));
+    public static class Deserializer implements JsonDeserializer<Model> {
+        @Override
+        public Model deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context)
+                throws JsonParseException {
+            JsonObject jsonRoot = json.getAsJsonObject();
 
-            JSONObject details = json.getJSONArray("weather").getJSONObject(0);
-            JSONObject main = json.getJSONObject("main");
+            Model model = new Model(jsonRoot.get("name").getAsString(),
+                    jsonRoot.get("dt").getAsLong());
 
-            detailsTextView.setText(String.format("%S%nHumidity: %S%%%nPressure: %S hPa",
-                    details.getString("description").toUpperCase(Locale.US),
-                    main.getString("humidity"), main.getString("pressure")));
+            JsonObject jsonSys = jsonRoot.get("sys").getAsJsonObject();
 
-            String currentTemperatureText = String.format("%S ℃", new DecimalFormat("##0.00").format(main.getDouble("temp")));
-            currentTemperatureTextView.setText(currentTemperatureText);
+            model.setCountry(jsonSys.get("country").getAsString());
+            model.setSunrise(jsonSys.get("sunrise").getAsLong());
+            model.setSunset(jsonSys.get("sunset").getAsLong());
 
-            DateFormat df = DateFormat.getDateTimeInstance();
-            String updatedOn = df.format(new Date(json.getLong("dt") * 1000));
+            JsonObject jsonMain = jsonRoot.get("main").getAsJsonObject();
+            model.setTemperature(jsonMain.get("temp").getAsDouble());
+            model.setHumidity(jsonMain.get("humidity").getAsString());
+            model.setPressure(jsonMain.get("pressure").getAsString());
 
-            updatedTextView.setText(String.format("Last update: %S", updatedOn));
+            JsonObject jsonWeather = jsonRoot.getAsJsonArray("weather")
+                    .get(0).getAsJsonObject();
+            model.setId(jsonWeather.get("id").getAsInt());
+            model.setDescription(jsonWeather.get("description").getAsString());
 
-            setWeatherIcon(details.getInt("id"),
-                    json.getJSONObject("sys").getLong("sunrise") * 1000,
-                    json.getJSONObject("sys").getLong("sunset") * 1000);
-
-        } catch (Exception e) {
-            Log.e(LOG_TAG, "One or more fields not found in the JSON data", e); // FIXME Обработка ошибки
+            return model;
         }
     }
 
-    //попытка обновление UI из WeatherObject
-    private void renderWeatherFronObject(JSONObject json) {
+    // Обработка загруженных данных и обновление UI
+    private void renderWeather(JSONObject json) {
         Log.d(LOG_TAG, "json " + json.toString());
         try {
-            cityTextView.setText(String.format("%S, %S",
-                    weather.getName().toUpperCase(Locale.US),
-                    weather.getCountry()));
+            GsonBuilder gsonBuilder = new GsonBuilder();
+            gsonBuilder.registerTypeAdapter(Model.class, new Deserializer());
 
-            detailsTextView.setText(String.format("%S%nHumidity: %S%%%nPressure: %S hPa",
-                    weather.getDescription().toUpperCase(Locale.US),
-                    weather.getHumidity(), weather.getPressure()));
+            Gson gson = gsonBuilder.create();
+            Model model = gson.fromJson(json.toString(), Model.class);
 
-            String currentTemperatureText = String.format("%S ℃", new DecimalFormat("##0.00").format(weather.getTemp()));
-            currentTemperatureTextView.setText(currentTemperatureText);
+            Resources res = getResources();
 
-            DateFormat df = DateFormat.getDateTimeInstance();
-            String updatedOn = df.format(new Date(weather.getDt() * 1000));
+            cityTextView.setText(String.format("%s, %s",
+                    model.getCity().toUpperCase(Locale.US), model.getCountry()));
 
-            updatedTextView.setText(String.format("Last update: %S", updatedOn));
+            String updatedOn = DateFormat.getDateTimeInstance().format(
+                    new Date(model.getTime() * 1000));
+            updatedTextView.setText(res.getString(R.string.last_update, updatedOn));
 
-            setWeatherIcon(weather.getId(),
-                    weather.getSunrise() * 1000,
-                    weather.getSunset() * 1000);
+            currentTemperatureTextView.setText(
+                    String.format(Locale.US, "%.2f ℃", model.getTemperature()));
 
+            detailsTextView.setText(String.format("%s\nHumidity: %s%%\nPressure: %s hPa",
+                    model.getDescription().toUpperCase(Locale.US),
+                    model.getHumidity(), model.getPressure()));
+
+            setWeatherIcon(model.getId(), model.getSunrise() * 1000,
+                    model.getSunset() * 1000);
         } catch (Exception e) {
             Log.e(LOG_TAG, "One or more fields not found in the JSON data", e); // FIXME Обработка ошибки
         }
@@ -198,6 +265,7 @@ public class MainActivity extends AppCompatActivity {
     private void setWeatherIcon(int actualId, long sunrise, long sunset) {
         int id = actualId / 100; // Упрощение кодов (int оставляет только целочисленное значение)
         String icon = "";
+
         if (actualId == 800) {
             long currentTime = new Date().getTime();
             if (currentTime >= sunrise && currentTime < sunset)
@@ -237,5 +305,32 @@ public class MainActivity extends AppCompatActivity {
     // Метод для доступа кнопки меню к данным
     public void changeCity(String city) {
         updateWeatherData(city);
+        saveToPreferences(R.string.save_city_prefs_key, city);
     }
+
+    private String loadFromPreferences(int key) {
+        SharedPreferences sharedPref = getSharedPreferences(LOG_TAG, Context.MODE_PRIVATE);
+
+        return sharedPref.getString(getString(key), "");
+    }
+
+    private void saveToPreferences(int key, String value) {
+        SharedPreferences sharedPref = getSharedPreferences(LOG_TAG,
+                Context.MODE_PRIVATE);
+        if (value != null && !value.toString().isEmpty())
+            sharedPref.edit().putString(getString(key),
+                    value.toString()).apply();
+    }
+
+    private void makeToast(String string) {
+        Toast toast = Toast.makeText(this, string, Toast.LENGTH_SHORT);
+        toast.show();
+    }
+
+    private void sendOut() {
+        Intent i = new Intent(Intent.ACTION_SEND);
+        i.setType("text/plain");
+        i.putExtra(Intent.EXTRA_TEXT, "text");
+        startActivity(i);
+    }//Поделиться
 }
