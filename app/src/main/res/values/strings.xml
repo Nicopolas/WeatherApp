@@ -29,6 +29,8 @@
     <string name="open_weather_maps_app_id">44e1b236fd0148c425beefd65430d588</string>
     
     <string name="save_city_prefs_key">save_city_prefs</string>
+    <string name="toast_external_storage_not_found">External storage not found</string>
+    <string name="avatar_file_name">avatar.png</string>
 
     <string name="navigation_drawer_open">Open navigation drawer</string>
     <string name="navigation_drawer_close">Close navigation drawer</string>

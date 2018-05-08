@@ -6,8 +6,11 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.design.widget.NavigationView;
@@ -21,6 +24,7 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -34,14 +38,15 @@ import com.google.gson.JsonParseException;
 
 import org.json.JSONObject;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.lang.reflect.Type;
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
-
-    // Классовые переменные
     private static final String LOG_TAG = MainActivity.class.getSimpleName();
     private static final String FONT_FILENAME = "fonts/weather.ttf";
     private static final String POSITIVE_BUTTON_TEXT = "Go";
@@ -59,6 +64,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private TextView detailsTextView;
     private TextView currentTemperatureTextView;
     private TextView weatherIcon;
+    private ImageView imageView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -70,7 +76,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         detailsTextView = findViewById(R.id.details_field);
         currentTemperatureTextView = findViewById(R.id.current_temperature_field);
         weatherIcon = findViewById(R.id.weather_icon);
-
         weatherFont = Typeface.createFromAsset(getAssets(), FONT_FILENAME);
         weatherIcon.setTypeface(weatherFont);
 
@@ -78,28 +83,36 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        // Находим drawer в ресурсах.
         DrawerLayout drawer = findViewById(R.id.drawer_layout);
-
-        // Этот класс связывает drawer и toolbar, позволяя drawer-у корректно отображаться с
-        // hamburger menu в action bar, а также выдвигает drawer и задвигает.
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
                 this, drawer, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
-        // Добавляем слушателя на drawer.
         drawer.addDrawerListener(toggle);
-        // Cинхронизируем hamburger menu с drawer.
         toggle.syncState();
-
-        // Специальный класс для размещения пунктов списка в drawer'е
         NavigationView navigationView = findViewById(R.id.nav_view);
-        // Добавляем слушатель нажатий на пункт списка
         navigationView.setNavigationItemSelectedListener(this);
-
+        imageView = (ImageView) navigationView.getHeaderView(0).findViewById(R.id.avatarImageView);
 
         String oldCity = loadFromPreferences(R.string.save_city_prefs_key);
         if (!oldCity.isEmpty()) {
             changeCity(oldCity);
         }
+
+        try {
+            saveAvatarInInternalStorage(this);
+        } catch (IOException e) {
+            e.printStackTrace();
+            finish();
+        }
+        loadAvatarFromInternalStorage(this);
+
+
+        try {
+            saveAvatarInExternalStorage(this);
+        } catch (IOException e) {
+            e.printStackTrace();
+            finish();
+        }
+        loadAvatarFromExternalStorage(this);
     }
 
     @Override
@@ -126,6 +139,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             return true;
         }
         return false;
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
     }
 
     // Показываем диалоговое окно с выбором города
@@ -308,12 +326,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         saveToPreferences(R.string.save_city_prefs_key, city);
     }
 
+    //метод выгрузки данных из Preferences
     private String loadFromPreferences(int key) {
         SharedPreferences sharedPref = getSharedPreferences(LOG_TAG, Context.MODE_PRIVATE);
 
         return sharedPref.getString(getString(key), "");
     }
 
+    //метод для сохранения данных в Preferences
     private void saveToPreferences(int key, String value) {
         SharedPreferences sharedPref = getSharedPreferences(LOG_TAG,
                 Context.MODE_PRIVATE);
@@ -333,4 +353,56 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         i.putExtra(Intent.EXTRA_TEXT, "text");
         startActivity(i);
     }//Поделиться
+
+    //запись аватара в InternalStorage
+    private void saveAvatarInInternalStorage(Context context) throws IOException {
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        Bitmap bitmap = BitmapFactory.decodeResource(getResources(), android.R.drawable.sym_def_app_icon, options);
+
+        //FileOutputStream outputStream = openFileOutput(context.getFilesDir() + getString(R.string.avatar_file_name), Context.MODE_PRIVATE);
+        FileOutputStream outputStream = new FileOutputStream(context.getFilesDir() + getString(R.string.avatar_file_name));
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 75, outputStream);
+        outputStream.flush();
+        outputStream.close();
+    }
+
+    private void loadAvatarFromInternalStorage(Context context) {
+        Bitmap bitmap = BitmapFactory.decodeFile(context.getFilesDir().toString() + getString(R.string.avatar_file_name));
+        imageView.setImageBitmap(bitmap);
+    }
+
+    private void saveAvatarInExternalStorage(Context context) throws IOException {
+        File file = new
+                File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS
+        ), getString(R.string.avatar_file_name));
+
+        if (!isExternalStorageWritable()) {
+            makeToast(getString(R.string.toast_external_storage_not_found));
+            return;
+        }
+        try {
+            FileOutputStream outputStream = new FileOutputStream(file, false);
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            Bitmap bitmap = BitmapFactory.decodeResource(getResources(), android.R.drawable.sym_def_app_icon, options);
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 75, outputStream);
+            outputStream.flush();
+            outputStream.close();
+        } catch (Exception e) {
+            makeToast(e.getMessage());
+        }
+
+    }
+
+    private void loadAvatarFromExternalStorage(Context context) {
+        File file = new
+                File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
+                , getString(R.string.avatar_file_name));
+        Bitmap bitmap = BitmapFactory.decodeFile(file.getPath());
+        imageView.setImageBitmap(bitmap);
+
+    }
+
+    private boolean isExternalStorageWritable() {
+        return true;
+    }
 }

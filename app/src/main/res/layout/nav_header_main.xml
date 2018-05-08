@@ -15,8 +15,14 @@
     <ImageView
         android:id="@+id/avatarImageView"
         android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
+
+    <!-- теперь загружаем из файла
+         <ImageView
+        android:id="@+id/avatarImageView"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:src="@android:drawable/sym_def_app_icon"/>
+        android:src="@android:drawable/sym_def_app_icon"/> -->
 
     <TextView
         android:layout_width="match_parent"
