@@ -50,6 +50,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private static final String LOG_TAG = MainActivity.class.getSimpleName();
     private static final String FONT_FILENAME = "fonts/weather.ttf";
     private static final String POSITIVE_BUTTON_TEXT = "Go";
+    WeatherDataSource weatherDataSource;
 
     // Handler - это класс, позволяющий отправлять и обрабатывать сообщения и объекты runnable.
     // Он используется в двух случаях - когда нужно применить объект runnable когда-то в будущем,
@@ -90,7 +91,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         toggle.syncState();
         NavigationView navigationView = findViewById(R.id.nav_view);
         navigationView.setNavigationItemSelectedListener(this);
-        imageView = (ImageView) navigationView.getHeaderView(0).findViewById(R.id.avatarImageView);
+        imageView = navigationView.getHeaderView(0).findViewById(R.id.avatarImageView);
 
         String oldCity = loadFromPreferences(R.string.save_city_prefs_key);
         if (!oldCity.isEmpty()) {
@@ -255,6 +256,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             Gson gson = gsonBuilder.create();
             Model model = gson.fromJson(json.toString(), Model.class);
 
+            weatherDataSource = new WeatherDataSource(getApplicationContext());
+            weatherDataSource.open();
+            weatherDataSource.addCity(model);
+            int ID = weatherDataSource.getIdCity(model.getCity());
+            weatherDataSource.close();
+
             Resources res = getResources();
 
             cityTextView.setText(String.format("%s, %s",
@@ -376,10 +383,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS
         ), getString(R.string.avatar_file_name));
 
-        if (!isExternalStorageWritable()) {
-            makeToast(getString(R.string.toast_external_storage_not_found));
-            return;
-        }
         try {
             FileOutputStream outputStream = new FileOutputStream(file, false);
             BitmapFactory.Options options = new BitmapFactory.Options();
@@ -399,10 +402,5 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 , getString(R.string.avatar_file_name));
         Bitmap bitmap = BitmapFactory.decodeFile(file.getPath());
         imageView.setImageBitmap(bitmap);
-
-    }
-
-    private boolean isExternalStorageWritable() {
-        return true;
     }
 }
