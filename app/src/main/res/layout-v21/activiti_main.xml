@@ -57,13 +57,12 @@
         android:layout_centerHorizontal="true"
         android:textAppearance="?android:attr/textAppearanceMedium"/>
 
-    <ImageButton
+    <android.support.design.widget.FloatingActionButton
         android:id="@+id/fab"
-        android:layout_width="50dp"
-        android:layout_height="40dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_alignBottom="@+id/current_temperature_field"
         android:layout_alignParentEnd="true"
-        android:background="@color/colorAccent"
         app:srcCompat="@android:drawable/ic_dialog_email" />
 
 </RelativeLayout>
