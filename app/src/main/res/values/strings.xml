@@ -20,36 +20,12 @@
     <string name="weather_thunder">&#xf01e;</string>
     <string name="weather_drizzle">&#xf01c;</string>
     <string name="place_not_found">Sorry, no weather data found.</string>
-    <string name="android_studio_web">zakharov.nikolay.com</string>
 
     <string name="last_update">Last update: %s</string>
 
     <!-- APP ID вашего аккаунта на сайте погоды: бесплатен -->
     <!-- Рекомендую завести и скопировать сюда собственный ключ -->
     <string name="open_weather_maps_app_id">44e1b236fd0148c425beefd65430d588</string>
-    
-    <string name="save_city_prefs_key">save_city_prefs</string>
-    <string name="toast_external_storage_not_found">External storage not found</string>
-    <string name="avatar_file_name">avatar.png</string>
-
-    <string name="navigation_drawer_open">Open navigation drawer</string>
-    <string name="navigation_drawer_close">Close navigation drawer</string>
-    <string name="menu_communicate">Communicate</string>
-    <string name="menu_open_main_windows">Открыть главное окно</string>
-    <string name="menu_about_developers">О разработчиках</string>
-    <string name="menu_share">Поделиться</string>
-    <string name="menu_add">Добавить</string>
-    <string name="menu_clear">Очистить</string>
-    <string name="menu_delete">Удалить</string>
-    <string name="menu_edit">Редактировать</string>
-    <string name="menu_open">Открыть</string>
-    <string name="menu_open_popup">Открыть PopupMenu</string>
-    <string name="menu_exit_app">Закрыть приложение</string>
-    <string name="nav_camera">Import</string>
-    <string name="nav_gallery">Gallery</string>
-    <string name="nav_slideshow">SlideShow</string>
-    <string name="nav_manage">Tools</string>
-    <string name="nav_share">Share</string>
-    <string name="nav_send">Send</string>
+    <string name="dont_found_weather_data">Нет данных по погоде в выбранном городе</string>
 
 </resources>

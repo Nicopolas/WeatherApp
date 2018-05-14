@@ -1,30 +1,26 @@
 package ru.example.geekbrains.weatherapp;
 
 import android.app.AlertDialog;
-import android.content.Context;
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.res.Resources;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+import android.database.Cursor;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
-import android.support.annotation.NonNull;
-import android.support.design.widget.NavigationView;
-import android.support.v4.view.GravityCompat;
-import android.support.v4.widget.DrawerLayout;
-import android.support.v7.app.ActionBarDrawerToggle;
+import android.provider.BaseColumns;
+import android.support.design.widget.FloatingActionButton;
+import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.Toolbar;
 import android.text.InputType;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.EditText;
-import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -38,19 +34,18 @@ import com.google.gson.JsonParseException;
 
 import org.json.JSONObject;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.lang.reflect.Type;
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
+public class MainActivity extends AppCompatActivity {
+
+    // Классовые переменные
     private static final String LOG_TAG = MainActivity.class.getSimpleName();
     private static final String FONT_FILENAME = "fonts/weather.ttf";
     private static final String POSITIVE_BUTTON_TEXT = "Go";
-    WeatherDataSource weatherDataSource;
+    public Model model;
 
     // Handler - это класс, позволяющий отправлять и обрабатывать сообщения и объекты runnable.
     // Он используется в двух случаях - когда нужно применить объект runnable когда-то в будущем,
@@ -65,66 +60,28 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private TextView detailsTextView;
     private TextView currentTemperatureTextView;
     private TextView weatherIcon;
-    private ImageView imageView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.workout_drawer_layout);
+        setContentView(R.layout.activity_main);
 
         cityTextView = findViewById(R.id.city_field);
         updatedTextView = findViewById(R.id.updated_field);
         detailsTextView = findViewById(R.id.details_field);
         currentTemperatureTextView = findViewById(R.id.current_temperature_field);
         weatherIcon = findViewById(R.id.weather_icon);
+
         weatherFont = Typeface.createFromAsset(getAssets(), FONT_FILENAME);
         weatherIcon.setTypeface(weatherFont);
 
-
-        Toolbar toolbar = findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-
-        DrawerLayout drawer = findViewById(R.id.drawer_layout);
-        ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
-                this, drawer, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
-        drawer.addDrawerListener(toggle);
-        toggle.syncState();
-        NavigationView navigationView = findViewById(R.id.nav_view);
-        navigationView.setNavigationItemSelectedListener(this);
-        imageView = navigationView.getHeaderView(0).findViewById(R.id.avatarImageView);
-
-        String oldCity = loadFromPreferences(R.string.save_city_prefs_key);
-        if (!oldCity.isEmpty()) {
-            changeCity(oldCity);
-        }
-
-        try {
-            saveAvatarInInternalStorage(this);
-        } catch (IOException e) {
-            e.printStackTrace();
-            finish();
-        }
-        loadAvatarFromInternalStorage(this);
-
-
-        try {
-            saveAvatarInExternalStorage(this);
-        } catch (IOException e) {
-            e.printStackTrace();
-            finish();
-        }
-        loadAvatarFromExternalStorage(this);
-    }
-
-    @Override
-    public void onBackPressed() {
-        //обработка нажатия в Navigation Drawer
-        DrawerLayout drawer = findViewById(R.id.drawer_layout);
-        if (drawer.isDrawerOpen(GravityCompat.START)) {
-            drawer.closeDrawer(GravityCompat.START);
-            return;
-        }
-        super.onBackPressed();
+        FloatingActionButton fab = findViewById(R.id.fab);
+        fab.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                sendOut();
+            }
+        });
     }
 
     @Override
@@ -140,11 +97,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             return true;
         }
         return false;
-    }
-
-    @Override
-    public void onPause() {
-        super.onPause();
     }
 
     // Показываем диалоговое окно с выбором города
@@ -190,33 +142,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }.start();
     }
 
-    @Override
-    public boolean onNavigationItemSelected(@NonNull MenuItem item) {
-
-        switch (item.getItemId()) {
-            case R.id.nav_main_windows:
-                makeToast("В разарботке");
-                break;
-            case R.id.nav_manage:
-                makeToast("В разарботке");
-                break;
-            case R.id.nav_about_developers:
-                makeToast("В разарботке");
-                break;
-            case R.id.nav_share:
-                sendOut();
-            case R.id.nav_exit_app:
-                finish();
-                break;
-        }
-
-        DrawerLayout drawer = findViewById(R.id.drawer_layout);
-        // закрываем NavigationView, параметр определяет анимацию закрытия
-        drawer.closeDrawer(GravityCompat.START);
-
-        return true;
-    }
-
     public static class Deserializer implements JsonDeserializer<Model> {
         @Override
         public Model deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context)
@@ -254,13 +179,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             gsonBuilder.registerTypeAdapter(Model.class, new Deserializer());
 
             Gson gson = gsonBuilder.create();
-            Model model = gson.fromJson(json.toString(), Model.class);
+            model = gson.fromJson(json.toString(), Model.class);
 
-            weatherDataSource = new WeatherDataSource(getApplicationContext());
-            weatherDataSource.open();
-            weatherDataSource.addCity(model);
-            int ID = weatherDataSource.getIdCity(model.getCity());
-            weatherDataSource.close();
+            saveToDb(model);
 
             Resources res = getResources();
 
@@ -280,7 +201,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
             setWeatherIcon(model.getId(), model.getSunrise() * 1000,
                     model.getSunset() * 1000);
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             Log.e(LOG_TAG, "One or more fields not found in the JSON data", e); // FIXME Обработка ошибки
         }
     }
@@ -297,7 +219,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 icon = getString(R.string.weather_sunny);
             else
                 icon = getString(R.string.weather_clear_night);
-        } else {
+        }
+        else {
             Log.d(LOG_TAG, "id " + id);
             switch (id) {
                 case 2:
@@ -330,77 +253,60 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     // Метод для доступа кнопки меню к данным
     public void changeCity(String city) {
         updateWeatherData(city);
-        saveToPreferences(R.string.save_city_prefs_key, city);
     }
 
-    //метод выгрузки данных из Preferences
-    private String loadFromPreferences(int key) {
-        SharedPreferences sharedPref = getSharedPreferences(LOG_TAG, Context.MODE_PRIVATE);
-
-        return sharedPref.getString(getString(key), "");
+    private Uri getUri() {
+        return Uri.parse(String.format("%s/%s",
+                String.format(CacheProvider.BASE_URI, getApplication().getPackageName()),
+                CacheProvider.TABLE_NAME));
     }
 
-    //метод для сохранения данных в Preferences
-    private void saveToPreferences(int key, String value) {
-        SharedPreferences sharedPref = getSharedPreferences(LOG_TAG,
-                Context.MODE_PRIVATE);
-        if (value != null && !value.toString().isEmpty())
-            sharedPref.edit().putString(getString(key),
-                    value.toString()).apply();
+    private void saveToDb(Model model) {
+        ContentValues values = new ContentValues();
+
+        values.put(CacheProvider.COLUMN_CITY, model.getCity());
+        values.put(CacheProvider.COLUMN_COUNTRY, model.getCountry());
+        values.put(CacheProvider.COLUMN_SUNRISE, model.getSunrise());
+        values.put(CacheProvider.COLUMN_SUNSET, model.getSunset());
+        values.put(CacheProvider.COLUMN_TEMPERATURE, model.getTemperature());
+        values.put(CacheProvider.COLUMN_HUMIDITY, model.getHumidity());
+        values.put(CacheProvider.COLUMN_PRESSURE, model.getPressure());
+        values.put(CacheProvider.COLUMN_DESCRIPTION, model.getDescription());
+        values.put(CacheProvider.COLUMN_TIME, model.getTime());
+
+        ContentResolver contentResolver = getContentResolver();
+
+        String[] projection = new String[] { BaseColumns._ID };
+        String selection = CacheProvider.COLUMN_CITY + "=?";
+        String[] selectionArgs = new String[] { model.getCity() };
+
+        Cursor cursor = contentResolver.query(getUri(), projection, selection, selectionArgs, null);
+        try {
+            if (cursor.getCount() > 0)
+                contentResolver.update(getUri(), values, selection, selectionArgs);
+            else
+                contentResolver.insert(getUri(), values);
+        }
+        finally {
+            cursor.close();
+        }
     }
 
-    private void makeToast(String string) {
-        Toast toast = Toast.makeText(this, string, Toast.LENGTH_SHORT);
-        toast.show();
-    }
 
-    private void sendOut() {
+    public void sendOut() {
+        if (model == null){
+            makeToast(getString(R.string.dont_found_weather_data));
+            return;
+        }
         Intent i = new Intent(Intent.ACTION_SEND);
         i.setType("text/plain");
-        i.putExtra(Intent.EXTRA_TEXT, "text");
+        String massage = String.format("%s.%s %s ℃", model.getCity(), model.getCountry(), model.getTemperature());
+        i.putExtra(Intent.EXTRA_TEXT, massage);
         startActivity(i);
     }//Поделиться
 
-    //запись аватара в InternalStorage
-    private void saveAvatarInInternalStorage(Context context) throws IOException {
-        BitmapFactory.Options options = new BitmapFactory.Options();
-        Bitmap bitmap = BitmapFactory.decodeResource(getResources(), android.R.drawable.sym_def_app_icon, options);
-
-        //FileOutputStream outputStream = openFileOutput(context.getFilesDir() + getString(R.string.avatar_file_name), Context.MODE_PRIVATE);
-        FileOutputStream outputStream = new FileOutputStream(context.getFilesDir() + getString(R.string.avatar_file_name));
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 75, outputStream);
-        outputStream.flush();
-        outputStream.close();
-    }
-
-    private void loadAvatarFromInternalStorage(Context context) {
-        Bitmap bitmap = BitmapFactory.decodeFile(context.getFilesDir().toString() + getString(R.string.avatar_file_name));
-        imageView.setImageBitmap(bitmap);
-    }
-
-    private void saveAvatarInExternalStorage(Context context) throws IOException {
-        File file = new
-                File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS
-        ), getString(R.string.avatar_file_name));
-
-        try {
-            FileOutputStream outputStream = new FileOutputStream(file, false);
-            BitmapFactory.Options options = new BitmapFactory.Options();
-            Bitmap bitmap = BitmapFactory.decodeResource(getResources(), android.R.drawable.sym_def_app_icon, options);
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 75, outputStream);
-            outputStream.flush();
-            outputStream.close();
-        } catch (Exception e) {
-            makeToast(e.getMessage());
-        }
-
-    }
-
-    private void loadAvatarFromExternalStorage(Context context) {
-        File file = new
-                File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
-                , getString(R.string.avatar_file_name));
-        Bitmap bitmap = BitmapFactory.decodeFile(file.getPath());
-        imageView.setImageBitmap(bitmap);
+    public void makeToast(String string) {
+        Toast toast = Toast.makeText(this, string, Toast.LENGTH_SHORT);
+        toast.show();
     }
 }
