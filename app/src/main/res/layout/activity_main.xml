@@ -58,7 +58,7 @@
         android:textAppearance="?android:attr/textAppearanceMedium"/>
 
     <ImageButton
-        android:id="@+id/fab"
+        android:id="@+id/fab_for_less_lollipop"
         android:layout_width="50dp"
         android:layout_height="40dp"
         android:layout_alignBottom="@+id/current_temperature_field"

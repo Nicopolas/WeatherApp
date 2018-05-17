@@ -2,20 +2,21 @@ package ru.example.geekbrains.weatherapp;
 
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
+import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.res.Resources;
 import android.database.Cursor;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
+import android.os.IBinder;
 import android.provider.BaseColumns;
 import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.text.InputType;
 import android.util.Log;
@@ -42,19 +43,17 @@ import java.text.DateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements ServiceCallbacks {
 
     // Классовые переменные
     private static final String LOG_TAG = MainActivity.class.getSimpleName();
     private static final String FONT_FILENAME = "fonts/weather.ttf";
     private static final String POSITIVE_BUTTON_TEXT = "Go";
-    public Model model;
-
-    // Handler - это класс, позволяющий отправлять и обрабатывать сообщения и объекты runnable.
-    // Он используется в двух случаях - когда нужно применить объект runnable когда-то в будущем,
-    // и когда необходимо передать другому потоку
-    // выполнение какого-то метода. Второй случай наш.
-    private final Handler handler = new Handler();
+    public static final String CITY_EXTRA = "city";
+    Model model;
+    UpdateWeatherDataService updateWeatherDataService;
+    ServiceConnection serviceConnection;
+    boolean mBound = false;
 
     //Реализация иконок погоды через шрифт (но можно и через картинки)
     private Typeface weatherFont;
@@ -67,7 +66,26 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            setContentView(R.layout.activiti_main);
+            @SuppressLint("WrongViewCast") FloatingActionButton fab = findViewById(R.id.fab);
+            fab.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    sendOut();
+                }
+            });
+        } else {
+            setContentView(R.layout.activity_main);
+            ImageButton fab = findViewById(R.id.fab_for_less_lollipop);
+            fab.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    sendOut();
+                }
+            });
+        }
 
         cityTextView = findViewById(R.id.city_field);
         updatedTextView = findViewById(R.id.updated_field);
@@ -77,24 +95,6 @@ public class MainActivity extends AppCompatActivity {
 
         weatherFont = Typeface.createFromAsset(getAssets(), FONT_FILENAME);
         weatherIcon.setTypeface(weatherFont);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            @SuppressLint("WrongViewCast") FloatingActionButton fab = findViewById(R.id.fab);
-            fab.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    sendOut();
-                }
-            });
-        } else {
-            ImageButton fab = findViewById(R.id.fab);
-            fab.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    sendOut();
-                }
-            });
-        }
     }
 
     @Override
@@ -130,29 +130,9 @@ public class MainActivity extends AppCompatActivity {
         builder.show();
     }
 
-    // Обновление/загрузка погодных данных
-    private void updateWeatherData(final String city) {
-        new Thread() { //Отдельный поток для получения новых данных в фоне
-            public void run() {
-                final JSONObject json = WeatherDataLoader.getJSONData(getApplicationContext(), city);
-                // Вызов методов напрямую может вызвать runtime error
-                // Мы не можем напрямую обновить UI, поэтому используем handler,
-                // чтобы обновить интерфейс в главном потоке.
-                if (json == null) {
-                    handler.post(new Runnable() {
-                        public void run() {
-                            Toast.makeText(getApplicationContext(), getString(R.string.place_not_found),
-                                    Toast.LENGTH_SHORT).show();
-                        }
-                    });
-                } else
-                    handler.post(new Runnable() {
-                        public void run() {
-                            renderWeather(json);
-                        }
-                    });
-            }
-        }.start();
+    @Override
+    public void renderWeatherFromInterface(JSONObject json) {
+        renderWeather(json);
     }
 
     public static class Deserializer implements JsonDeserializer<Model> {
@@ -214,8 +194,7 @@ public class MainActivity extends AppCompatActivity {
 
             setWeatherIcon(model.getId(), model.getSunrise() * 1000,
                     model.getSunset() * 1000);
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             Log.e(LOG_TAG, "One or more fields not found in the JSON data", e); // FIXME Обработка ошибки
         }
     }
@@ -232,8 +211,7 @@ public class MainActivity extends AppCompatActivity {
                 icon = getString(R.string.weather_sunny);
             else
                 icon = getString(R.string.weather_clear_night);
-        }
-        else {
+        } else {
             Log.d(LOG_TAG, "id " + id);
             switch (id) {
                 case 2:
@@ -265,7 +243,28 @@ public class MainActivity extends AppCompatActivity {
 
     // Метод для доступа кнопки меню к данным
     public void changeCity(String city) {
-        updateWeatherData(city);
+        Intent intent = new Intent(getBaseContext(), UpdateWeatherDataService.class);
+        intent.putExtra(CITY_EXTRA, city);
+        serviceConnection = new ServiceConnection() {
+            @Override
+            public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
+
+                UpdateWeatherDataService.LocalBinder binder = (UpdateWeatherDataService.LocalBinder) iBinder;
+                updateWeatherDataService = binder.getService();
+                updateWeatherDataService.setCallbacks(MainActivity.this);
+                mBound = true;
+
+                Log.d(LOG_TAG, "onServiceConnected");
+            }
+
+            @Override
+            public void onServiceDisconnected(ComponentName componentName) {
+                Log.d(LOG_TAG, "onServiceDisconnected");
+            }
+        };
+        bindService(intent, serviceConnection, BIND_AUTO_CREATE);
+
+        //updateWeatherData(city);
     }
 
     private Uri getUri() {
@@ -289,9 +288,9 @@ public class MainActivity extends AppCompatActivity {
 
         ContentResolver contentResolver = getContentResolver();
 
-        String[] projection = new String[] { BaseColumns._ID };
+        String[] projection = new String[]{BaseColumns._ID};
         String selection = CacheProvider.COLUMN_CITY + "=?";
-        String[] selectionArgs = new String[] { model.getCity() };
+        String[] selectionArgs = new String[]{model.getCity()};
 
         Cursor cursor = contentResolver.query(getUri(), projection, selection, selectionArgs, null);
         try {
@@ -299,15 +298,14 @@ public class MainActivity extends AppCompatActivity {
                 contentResolver.update(getUri(), values, selection, selectionArgs);
             else
                 contentResolver.insert(getUri(), values);
-        }
-        finally {
+        } finally {
             cursor.close();
         }
     }
 
 
-    public void sendOut() {
-        if (model == null){
+    private void sendOut() {
+        if (model == null) {
             makeToast(getString(R.string.dont_found_weather_data));
             return;
         }
@@ -318,8 +316,19 @@ public class MainActivity extends AppCompatActivity {
         startActivity(i);
     }//Поделиться
 
-    public void makeToast(String string) {
+    private void makeToast(String string) {
         Toast toast = Toast.makeText(this, string, Toast.LENGTH_SHORT);
         toast.show();
+    }
+
+    @Override
+    protected void onStop() {
+        // Unbind from the service
+        if (mBound) {
+            updateWeatherDataService.setCallbacks(null);
+            unbindService(serviceConnection);
+            mBound = false;
+        }
+        super.onStop();
     }
 }

@@ -28,4 +28,7 @@
     <string name="open_weather_maps_app_id">44e1b236fd0148c425beefd65430d588</string>
     <string name="dont_found_weather_data">Нет данных по погоде в выбранном городе</string>
 
+    <string name="bind_service_massage">Сервис был подключен</string>
+    <string name="unbind_service_massage">Сервис был отключен</string>
+
 </resources>
