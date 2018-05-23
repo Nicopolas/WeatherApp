@@ -19,16 +19,35 @@
             </intent-filter>
         </activity>
 
+        <service
+            android:name=".StartedService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="ru.example.geekbrains.weatherapp.RESULT" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name=".WidgetWeather"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_weather_info" />
+        </receiver>
+
+        <service
+            android:name=".WeatherWidgetService"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
         <provider
             android:name=".CacheProvider"
             android:authorities="ru.example.geekbrains.weatherapp.provider"
             android:enabled="true"
             android:exported="false" />
-
-        <service
-            android:name=".UpdateWeatherDataService"
-            android:enabled="true"
-            android:exported="true"></service>
     </application>
 
 </manifest>

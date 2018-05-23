@@ -1,30 +1,28 @@
 package ru.example.geekbrains.weatherapp;
 
-import android.annotation.SuppressLint;
 import android.app.AlertDialog;
-import android.content.ComponentName;
+import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.ServiceConnection;
+import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.res.Resources;
 import android.database.Cursor;
 import android.graphics.Typeface;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.IBinder;
+import android.os.Handler;
 import android.provider.BaseColumns;
-import android.support.design.widget.FloatingActionButton;
+import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.AppCompatActivity;
 import android.text.InputType;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.View;
 import android.widget.EditText;
-import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -36,24 +34,24 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 
-import org.json.JSONObject;
-
 import java.lang.reflect.Type;
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-public class MainActivity extends AppCompatActivity implements ServiceCallbacks {
+public class MainActivity extends AppCompatActivity {
 
     // Классовые переменные
     private static final String LOG_TAG = MainActivity.class.getSimpleName();
     private static final String FONT_FILENAME = "fonts/weather.ttf";
     private static final String POSITIVE_BUTTON_TEXT = "Go";
-    public static final String CITY_EXTRA = "city";
-    Model model;
-    UpdateWeatherDataService updateWeatherDataService;
-    ServiceConnection serviceConnection;
-    boolean mBound = false;
+    SharedPreferences sPref;
+
+    // Handler - это класс, позволяющий отправлять и обрабатывать сообщения и объекты runnable.
+    // Он используется в двух случаях - когда нужно применить объект runnable когда-то в будущем,
+    // и когда необходимо передать другому потоку
+    // выполнение какого-то метода. Второй случай наш.
+    private final Handler handler = new Handler();
 
     //Реализация иконок погоды через шрифт (но можно и через картинки)
     private Typeface weatherFont;
@@ -63,29 +61,13 @@ public class MainActivity extends AppCompatActivity implements ServiceCallbacks 
     private TextView currentTemperatureTextView;
     private TextView weatherIcon;
 
+    private LocalBroadcastManager localBroadcastManager;
+    private BroadcastReceiver broadcastReceiver;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            setContentView(R.layout.activiti_main);
-            @SuppressLint("WrongViewCast") FloatingActionButton fab = findViewById(R.id.fab);
-            fab.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    sendOut();
-                }
-            });
-        } else {
-            setContentView(R.layout.activity_main);
-            ImageButton fab = findViewById(R.id.fab_for_less_lollipop);
-            fab.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    sendOut();
-                }
-            });
-        }
+        setContentView(R.layout.activity_main);
 
         cityTextView = findViewById(R.id.city_field);
         updatedTextView = findViewById(R.id.updated_field);
@@ -95,6 +77,37 @@ public class MainActivity extends AppCompatActivity implements ServiceCallbacks 
 
         weatherFont = Typeface.createFromAsset(getAssets(), FONT_FILENAME);
         weatherIcon.setTypeface(weatherFont);
+
+        localBroadcastManager = LocalBroadcastManager.getInstance(this);
+
+        broadcastReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                final String json = intent.getStringExtra(Intent.EXTRA_TEXT);
+                if (json.equals(StartedService.ERROR)) {
+                    handler.post(new Runnable() {
+                        public void run() {
+                            Toast.makeText(getApplicationContext(), getString(R.string.place_not_found),
+                                    Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                } else
+                    handler.post(new Runnable() {
+                        public void run() {
+                            renderWeather(json);
+                        }
+                    });
+            }
+        };
+
+        localBroadcastManager.registerReceiver(broadcastReceiver,
+                new IntentFilter(StartedService.INTENT_RESULT));
+    }
+
+    @Override
+    protected void onDestroy() {
+        localBroadcastManager.unregisterReceiver(broadcastReceiver);
+        super.onDestroy();
     }
 
     @Override
@@ -130,9 +143,11 @@ public class MainActivity extends AppCompatActivity implements ServiceCallbacks 
         builder.show();
     }
 
-    @Override
-    public void renderWeatherFromInterface(JSONObject json) {
-        renderWeather(json);
+    private void updateWeatherData(final String city) {
+        saveCity(city);
+        Intent intent = new Intent(getBaseContext(), StartedService.class);
+        intent.putExtra(Intent.EXTRA_TEXT, city);
+        startService(intent);
     }
 
     public static class Deserializer implements JsonDeserializer<Model> {
@@ -165,14 +180,14 @@ public class MainActivity extends AppCompatActivity implements ServiceCallbacks 
     }
 
     // Обработка загруженных данных и обновление UI
-    private void renderWeather(JSONObject json) {
-        Log.d(LOG_TAG, "json " + json.toString());
+    private void renderWeather(String json) {
+        Log.d(LOG_TAG, "json " + json);
         try {
             GsonBuilder gsonBuilder = new GsonBuilder();
             gsonBuilder.registerTypeAdapter(Model.class, new Deserializer());
 
             Gson gson = gsonBuilder.create();
-            model = gson.fromJson(json.toString(), Model.class);
+            Model model = gson.fromJson(json, Model.class);
 
             saveToDb(model);
 
@@ -194,7 +209,8 @@ public class MainActivity extends AppCompatActivity implements ServiceCallbacks 
 
             setWeatherIcon(model.getId(), model.getSunrise() * 1000,
                     model.getSunset() * 1000);
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             Log.e(LOG_TAG, "One or more fields not found in the JSON data", e); // FIXME Обработка ошибки
         }
     }
@@ -211,7 +227,8 @@ public class MainActivity extends AppCompatActivity implements ServiceCallbacks 
                 icon = getString(R.string.weather_sunny);
             else
                 icon = getString(R.string.weather_clear_night);
-        } else {
+        }
+        else {
             Log.d(LOG_TAG, "id " + id);
             switch (id) {
                 case 2:
@@ -243,28 +260,7 @@ public class MainActivity extends AppCompatActivity implements ServiceCallbacks 
 
     // Метод для доступа кнопки меню к данным
     public void changeCity(String city) {
-        Intent intent = new Intent(getBaseContext(), UpdateWeatherDataService.class);
-        intent.putExtra(CITY_EXTRA, city);
-        serviceConnection = new ServiceConnection() {
-            @Override
-            public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
-
-                UpdateWeatherDataService.LocalBinder binder = (UpdateWeatherDataService.LocalBinder) iBinder;
-                updateWeatherDataService = binder.getService();
-                updateWeatherDataService.setCallbacks(MainActivity.this);
-                mBound = true;
-
-                Log.d(LOG_TAG, "onServiceConnected");
-            }
-
-            @Override
-            public void onServiceDisconnected(ComponentName componentName) {
-                Log.d(LOG_TAG, "onServiceDisconnected");
-            }
-        };
-        bindService(intent, serviceConnection, BIND_AUTO_CREATE);
-
-        //updateWeatherData(city);
+        updateWeatherData(city);
     }
 
     private Uri getUri() {
@@ -288,47 +284,34 @@ public class MainActivity extends AppCompatActivity implements ServiceCallbacks 
 
         ContentResolver contentResolver = getContentResolver();
 
-        String[] projection = new String[]{BaseColumns._ID};
+        String[] projection = new String[] { BaseColumns._ID };
         String selection = CacheProvider.COLUMN_CITY + "=?";
-        String[] selectionArgs = new String[]{model.getCity()};
+        String[] selectionArgs = new String[] { model.getCity() };
 
         Cursor cursor = contentResolver.query(getUri(), projection, selection, selectionArgs, null);
         try {
-            if (cursor.getCount() > 0)
+            if (cursor != null && cursor.getCount() > 0)
                 contentResolver.update(getUri(), values, selection, selectionArgs);
             else
                 contentResolver.insert(getUri(), values);
-        } finally {
-            cursor.close();
+        }
+        finally {
+            if (cursor != null) cursor.close();
         }
     }
 
-
-    private void sendOut() {
-        if (model == null) {
-            makeToast(getString(R.string.dont_found_weather_data));
-            return;
-        }
-        Intent i = new Intent(Intent.ACTION_SEND);
-        i.setType("text/plain");
-        String massage = String.format("%s.%s %s ℃", model.getCity(), model.getCountry(), model.getTemperature());
-        i.putExtra(Intent.EXTRA_TEXT, massage);
-        startActivity(i);
-    }//Поделиться
-
-    private void makeToast(String string) {
-        Toast toast = Toast.makeText(this, string, Toast.LENGTH_SHORT);
-        toast.show();
+    void saveCity(String city) {
+        sPref = getSharedPreferences(getString(R.string.preferences_city), MODE_PRIVATE);
+        SharedPreferences.Editor ed = sPref.edit();
+        ed.putString(getString(R.string.preferences_city), city);
+        ed.commit();
+        Toast.makeText(this, "City saved", Toast.LENGTH_SHORT).show();
     }
 
-    @Override
-    protected void onStop() {
-        // Unbind from the service
-        if (mBound) {
-            updateWeatherDataService.setCallbacks(null);
-            unbindService(serviceConnection);
-            mBound = false;
-        }
-        super.onStop();
+    void loadCity() {
+        sPref = getPreferences(MODE_PRIVATE);
+        String savedText = sPref.getString(getString(R.string.preferences_city), "");
+        Toast.makeText(this, "Text loaded", Toast.LENGTH_SHORT).show();
     }
+
 }

@@ -26,9 +26,8 @@
     <!-- APP ID вашего аккаунта на сайте погоды: бесплатен -->
     <!-- Рекомендую завести и скопировать сюда собственный ключ -->
     <string name="open_weather_maps_app_id">44e1b236fd0148c425beefd65430d588</string>
-    <string name="dont_found_weather_data">Нет данных по погоде в выбранном городе</string>
-
-    <string name="bind_service_massage">Сервис был подключен</string>
-    <string name="unbind_service_massage">Сервис был отключен</string>
+    <string name="appwidget_text">EXAMPLE</string>
+    <string name="add_widget">Add widget</string>
+    <string name="preferences_city">City</string>
 
 </resources>
